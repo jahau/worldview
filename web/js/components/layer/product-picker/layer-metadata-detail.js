@@ -5,7 +5,7 @@ import util from '../../../util/util.js';
 import { ListGroup, ListGroupItem } from 'reactstrap';
 import Scrollbars from '../../util/scrollbar';
 
-class MetadataDetail extends React.Component {
+class LayerMetadataDetail extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
@@ -262,12 +262,12 @@ class MetadataDetail extends React.Component {
         <h3 className="no-layer-selected"> No layer selected </h3>
       );
     }
-    const { layer } = this.props;
+    const { layer, height } = this.props;
     const { title, subtitle, track, metadata } = layer;
     const layerTitle = !track ? title : `${title} (${getOrbitTrackTitle(layer)})`;
 
     return (
-      <Scrollbars style={{ maxHeight: 800 + 'px' }}>
+      <Scrollbars style={{ maxHeight: height + 'px' }}>
         <div className="layers-all-layer">
           <div className="layers-all-header">
             <h3> {layerTitle} </h3>
@@ -283,11 +283,11 @@ class MetadataDetail extends React.Component {
   }
 }
 
-MetadataDetail.propTypes = {
+LayerMetadataDetail.propTypes = {
   layer: PropTypes.object
 };
 
-export default MetadataDetail;
+export default LayerMetadataDetail;
 
 // this function takes an array of date ranges in this format:
 // [{ layer.period, dateRanges.startDate: Date, dateRanges.endDate: Date, dateRanges.dateInterval: Number}]
