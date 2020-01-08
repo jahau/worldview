@@ -228,6 +228,7 @@ class TimelineData extends Component {
           <div className={'timeline-data-panel'} style={{ width: mainContainerWidth }}>
             <header className={'timeline-data-panel-header'}>
               <h3>LAYER COVERAGE</h3>
+              {/* TODO: Toggle coincident vs all coverage */}
               <Checkbox
                 checked={this.state.isMatchingCoverageChecked}
                 classNames='wv-checkbox-data-matching-main'
@@ -257,8 +258,18 @@ class TimelineData extends Component {
                   const dateRangeStart = (layer.startDate && layer.startDate.split('T')[0]) || 'start';
                   const dateRangeEnd = (layer.endDate && layer.endDate.split('T')[0]) || 'present';
                   const dateRange = `${dateRangeStart} - ${dateRangeEnd}`;
+
+                  const isLayerHoveredInSidebar = layer.id === this.props.hoveredLayer;
+                  if (isLayerHoveredInSidebar) {
+                    console.log('hovered', this.props.hoveredLayer);
+                  }
                   return (
-                    <div key={index} className={`data-panel-layer-item data-item-${layer.id}`}>
+                    <div key={index} className={`data-panel-layer-item data-item-${layer.id}`}
+                      style={{
+                        background: isLayerHoveredInSidebar ? '#474747' : '',
+                        outline: isLayerHoveredInSidebar ? '1px solid #858585' : ''
+                      }}
+                    >
                       <div className="data-panel-layer-item-header">
                         <div className="data-panel-layer-item-title">{layer.title} <span className="data-panel-layer-item-subtitle">{layer.subtitle}</span></div>
                         <Checkbox
@@ -361,9 +372,11 @@ function mapStateToProps(state) {
   } = date;
 
   const activeLayers = layers[compare.activeString].filter(activeLayer => activeLayer.startDate);
+  const hoveredLayer = layers.hoveredLayer;
 
   return {
     activeLayers,
+    hoveredLayer,
     appNow
   };
 }
