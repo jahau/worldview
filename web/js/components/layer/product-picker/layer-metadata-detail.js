@@ -256,10 +256,24 @@ class LayerMetadataDetail extends React.Component {
     );
   }
 
+  renderSplitTitle(title) {
+    const splitIdx = title.indexOf('(');
+    const attrs = title.slice(splitIdx);
+    const titleName = title.slice(0, splitIdx - 1);
+    return splitIdx < 0 || title.length < 40
+      ? <h3> {title} </h3>
+      : (
+        <>
+          <h3> {titleName} </h3>
+          <h4> {attrs} </h4>
+        </>
+      );
+  }
+
   render() {
     if (!this.props.layer) {
       return (
-        <h3 className="no-results"> No item selected </h3>
+        <h3 className="no-results"> No item selected. </h3>
       );
     }
     const { layer, height } = this.props;
@@ -270,7 +284,7 @@ class LayerMetadataDetail extends React.Component {
       <Scrollbars style={{ maxHeight: height + 'px' }}>
         <div className="layers-all-layer">
           <div className="layers-all-header">
-            <h3> {layerTitle} </h3>
+            {!track ? this.renderSplitTitle(layerTitle) : <h3>{layerTitle}</h3>}
             {subtitle && <h5>{subtitle}</h5>}
           </div>
           <div className="source-metadata visible">
@@ -284,6 +298,7 @@ class LayerMetadataDetail extends React.Component {
 }
 
 LayerMetadataDetail.propTypes = {
+  height: PropTypes.number,
   layer: PropTypes.object
 };
 
