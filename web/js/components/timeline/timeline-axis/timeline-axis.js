@@ -1,10 +1,10 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import Draggable from 'react-draggable';
+import GridRange from './grid-range/grid-range';
 import moment from 'moment';
 
-import GridRange from './grid-range/grid-range';
-
+import { debounce as lodashDebounce } from 'lodash';
 import { getTimeRange } from './date-calc';
 import {
   timeScaleOptions,
@@ -12,6 +12,7 @@ import {
 } from '../../../modules/date/constants';
 import {
   getIsBetween,
+  getISODateFormatted,
   removeBackMultipleInPlace,
   removeFrontMultipleInPlace
 } from '../date-util';
@@ -26,19 +27,28 @@ class TimelineAxis extends Component {
       currentTimeRange: null,
       gridWidth: 12,
       wheelZoom: false,
-      mouseDown: false
+      mouseDown: false,
+      hitRightBound: false,
+      hitLeftBound: false
     };
     // axis
     this.handleDrag = this.handleDrag.bind(this);
     this.handleStartDrag = this.handleStartDrag.bind(this);
     this.handleStopDrag = this.handleStopDrag.bind(this);
-    this.handleWheel = this.handleWheel.bind(this);
 
     // axis click to set dragger
     this.setLineTime = this.setLineTime.bind(this);
 
     // wheel event timeout
     this.wheelTimeout = 0;
+
+    // debounce wheel vertical scroll for timescale unit change
+    const debounceSettings = { leading: true, trailing: false };
+    this.debounceHandleWheelScroll = lodashDebounce(
+      this.handleWheelScroll.bind(this),
+      100,
+      debounceSettings
+    );
   }
 
   /**
@@ -269,7 +279,9 @@ class TimelineAxis extends Component {
       dragSentinelCount: boundsDiff,
       leftBound,
       rightBound,
-      wheelZoom: false
+      wheelZoom: false,
+      hitLeftBound: false,
+      hitRightBound: false
     }, this.props.updatePositioning(updatePositioningArguments, timeScale === 'year' ? hoverTime : hoverTimeString));
   }
 
@@ -666,74 +678,139 @@ class TimelineAxis extends Component {
   }
 
   /**
-  * @desc changes timeScale with wheel scroll
+  * @desc determine wheel type function of scroll or pan
   * y axis change - change timescale (e.g. from 'day' to 'month')
   * x axis change - horizontal scroll multi-touch
   * @param {Event} wheel scroll event
   * @returns {void}
   */
-  handleWheel(e) {
+  handleWheelType = (e) => {
+    if (e.deltaY !== 0) {
+      this.debounceHandleWheelScroll(e);
+    } else if (e.deltaX !== 0) {
+      this.handleWheelPan(e);
+    }
+  }
+
+  /**
+  * @desc changes timeScale with wheel scroll
+  * y axis change - change timescale scroll (e.g. from 'day' to 'month')
+  * @param {Event} wheel scroll event
+  * @returns {void}
+  */
+  handleWheelScroll(e) {
     const {
-      position,
       timeScale,
-      updateTimelineMoveAndDrag,
       hasSubdailyLayers,
       changeTimeScale
     } = this.props;
-    const { leftBound, rightBound } = this.state;
     const timeScaleNumber = Number(timeScaleToNumberKey[timeScale]);
     const maxTimeScaleNumber = hasSubdailyLayers ? 5 : 3;
 
     // handle time scale change on y axis wheel event
     if (e.deltaY !== 0) {
-      if (e.deltaY > 0) { // wheel zoom out
+      // wheel zoom out
+      if (e.deltaY > 0) {
         if (timeScaleNumber > 1) {
-          this.setState({
-            wheelZoom: true
-          }, changeTimeScale(timeScaleNumber - 1));
+          clearTimeout(this.wheelTimeout);
+          this.wheelTimeout = setTimeout(() => {
+            this.setState({
+              wheelZoom: true
+            }, changeTimeScale(timeScaleNumber - 1));
+          }, 50);
         }
+      // wheel zoom in
       } else {
-        if (timeScaleNumber < maxTimeScaleNumber) { // wheel zoom in
-          this.setState({
-            wheelZoom: true
-          }, changeTimeScale(timeScaleNumber + 1));
+        if (timeScaleNumber < maxTimeScaleNumber) {
+          clearTimeout(this.wheelTimeout);
+          this.wheelTimeout = setTimeout(() => {
+            this.setState({
+              wheelZoom: true
+            }, changeTimeScale(timeScaleNumber + 1));
+          }, 50);
         }
       }
     }
+  }
+
+  /**
+  * @desc changes timeScale with wheel pan
+  * allow trailing events (can keep sliding after release)
+  * x axis change - horizontal pan multi-touch
+  * @param {Event} wheel scroll event
+  * @returns {void}
+  */
+  handleWheelPan(e) {
+    const {
+      position,
+      updateTimelineMoveAndDrag
+    } = this.props;
+    const {
+      leftBound,
+      rightBound,
+      hitLeftBound,
+      hitRightBound
+    } = this.state;
+    const deltaChangeCoefficient = 20;
+
     // handle horizontal scroll on x axis wheel event
     if (e.deltaX !== 0) {
       this.handleStartDrag();
-      if (e.deltaX > 0) { // mutli-touch drag left
-        const scrollX = position - 100;
-        if (scrollX < leftBound) { // cancel drag if exceeds axis leftBound
+      // mutli-touch drag left
+      if (e.deltaX > 0) {
+        const scrollX = position - deltaChangeCoefficient;
+        // cancel drag if exceeds axis leftBound and hitLeftBound flag hit
+        if (scrollX < leftBound && hitLeftBound) {
           clearTimeout(this.wheelTimeout);
           updateTimelineMoveAndDrag(false, false);
         } else {
           const deltaObj = {
-            deltaX: -100,
+            deltaX: -deltaChangeCoefficient,
             x: scrollX
           };
-          this.handleDrag(e, deltaObj);
-          clearTimeout(this.wheelTimeout);
-          this.wheelTimeout = setTimeout(() => {
-            this.handleStopDrag(null, deltaObj, true);
-          }, 50);
+
+          // if leftBound will be hit with next delta pan
+          if (position - deltaChangeCoefficient * 2 < leftBound) {
+            updateTimelineMoveAndDrag(false, false);
+            this.setState({
+              hitLeftBound: true
+            });
+          } else {
+            // drag and update positioning
+            this.handleDrag(e, deltaObj);
+            clearTimeout(this.wheelTimeout);
+            this.wheelTimeout = setTimeout(() => {
+              this.handleStopDrag(null, deltaObj, true);
+            }, 50);
+          }
         }
-      } else { // multi-touch drag right
-        const scrollX = position + 100;
-        if (scrollX > rightBound) { // cancel drag if exceeds axis rightBound
+      // multi-touch drag right
+      } else {
+        const scrollX = position + deltaChangeCoefficient;
+        // cancel drag if exceeds axis rightBound and hitRightBound flag hit
+        if (scrollX > rightBound && hitRightBound) {
           clearTimeout(this.wheelTimeout);
           updateTimelineMoveAndDrag(false, false);
         } else {
           const deltaObj = {
-            deltaX: 100,
+            deltaX: deltaChangeCoefficient,
             x: scrollX
           };
-          this.handleDrag(e, deltaObj);
-          clearTimeout(this.wheelTimeout);
-          this.wheelTimeout = setTimeout(() => {
-            this.handleStopDrag(null, deltaObj, true);
-          }, 50);
+
+          // if leftBound will be hit with next delta pan
+          if (position + deltaChangeCoefficient * 2 > rightBound) {
+            updateTimelineMoveAndDrag(false, false);
+            this.setState({
+              hitRightBound: true
+            });
+          } else {
+            // drag and update positioning
+            this.handleDrag(e, deltaObj);
+            clearTimeout(this.wheelTimeout);
+            this.wheelTimeout = setTimeout(() => {
+              this.handleStopDrag(null, deltaObj, true);
+            }, 50);
+          }
         }
       }
     }
@@ -1099,9 +1176,14 @@ class TimelineAxis extends Component {
       rightBound
     } = this.state;
     let {
+      frontDate,
+      leftOffset,
       position,
       hoverTime,
       transformX,
+      timeScale,
+      timelineStartDateLimit,
+      timelineEndDateLimit,
       updatePositioningOnAxisStopDrag
     } = this.props;
 
@@ -1130,8 +1212,46 @@ class TimelineAxis extends Component {
       rightBound,
       wheelZoom: !!wheelZoom
     });
-    // hoverTime conditional reset necessary for touchpad horizontal scroll gesture
-    const hoverTimeDate = hasMoved ? null : hoverTime;
+
+    // hoverTime conditional calculation necessary for touchpad horizontal scroll gesture
+    let hoverTimeDate;
+    if (hasMoved) {
+      const options = timeScaleOptions[timeScale].timeAxis;
+      const gridWidth = options.gridWidth;
+      const diffZeroValues = options.scaleMs;
+      const newHoverTimeValue = new Date(frontDate).getTime();
+      if (!diffZeroValues) {
+        // calculate based on frontDate due to varying number of days per month and per year (leapyears)
+        const hoverLinePositionRelativeToFrontDate = leftOffset - midPoint - transformX;
+        const gridWidthCoef = hoverLinePositionRelativeToFrontDate / gridWidth;
+        const hoverTimeAdded = moment.utc(frontDate).add(gridWidthCoef, timeScale);
+        let daysCount;
+        if (timeScale === 'year') {
+          daysCount = hoverTimeAdded.isLeapYear() ? 366 : 365;
+        } else if (timeScale === 'month') {
+          daysCount = hoverTimeAdded.daysInMonth();
+        }
+        const gridWidthCoefRemainder = gridWidthCoef - Math.floor(gridWidthCoef);
+        const remainderMilliseconds = daysCount * 86400000 * gridWidthCoefRemainder;
+        hoverTimeDate = getISODateFormatted(hoverTimeAdded.add(remainderMilliseconds));
+      } else {
+        // calculate based on known diffZeroValues (days, hours, minutes)
+        const diffFactor = diffZeroValues / gridWidth;
+        const hoverDelta = (leftOffset - midPoint) / gridWidth;
+        hoverTimeDate = getISODateFormatted(newHoverTimeValue + (diffFactor * hoverDelta));
+      }
+    } else {
+      hoverTimeDate = hoverTime;
+    }
+
+    // prevent edge case fast scroll/timescale switch over date before/beyond axis coverage
+    hoverTimeDate = new Date(hoverTimeDate) > new Date(timelineEndDateLimit)
+      ? timelineEndDateLimit
+      : new Date(hoverTimeDate) < new Date(timelineStartDateLimit)
+        ? timelineStartDateLimit
+        : hoverTimeDate;
+
+    // parent update positioning and hovertime
     updatePositioningOnAxisStopDrag(updatePositioningArguments, hoverTimeDate);
   }
 
@@ -1221,7 +1341,7 @@ class TimelineAxis extends Component {
           style={{ width: `${axisWidth}px` }}
           onMouseDown={this.handleMouseDown}
           onMouseUp={this.setLineTime}
-          onWheel={this.handleWheel}
+          onWheel={this.handleWheelType}
           onMouseOver={this.showHoverOn}
           onMouseLeave={showHoverOff}
           onTouchStart={this.handleMouseDown}

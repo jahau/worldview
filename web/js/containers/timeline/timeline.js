@@ -443,7 +443,10 @@ class Timeline extends React.Component {
   * @returns {void}
   */
   changeTimeScale = (timeScale) => {
-    this.props.changeTimeScale(timeScale);
+    this.setState({
+      showHoverLine: false,
+      showDraggerTime: false
+    }, this.props.changeTimeScale(timeScale));
   };
 
   /**
