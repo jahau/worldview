@@ -113,6 +113,9 @@ class Timeline extends React.Component {
     this.debounceOnUpdateEndDate = lodashDebounce(this.props.onUpdateEndDate, 30);
     this.debounceOnUpdateStartAndEndDate = lodashDebounce(this.props.onUpdateStartAndEndDate, 30);
 
+    // change timescale
+    this.debounceChangeTimeScale = lodashDebounce(this.changeTimeScale, 100, throttleSettings);
+
     // application relative now time
     this.appNowUpdateInterval = 0;
   }
@@ -396,8 +399,12 @@ class Timeline extends React.Component {
   * @returns {void}
   */
   handleKeyDown = (e) => {
+    const { isTimelineDragging } = this.state;
+    const { hasSubdailyLayers, timeScale } = this.props;
     // prevent left/right arrows changing date within inputs
-    if (e.target.tagName !== 'INPUT' && !e.ctrlKey && !e.metaKey && !this.state.isTimelineDragging) {
+    if (e.target.tagName !== 'INPUT' && !e.ctrlKey && !e.metaKey && !isTimelineDragging) {
+      const timeScaleNumber = Number(timeScaleToNumberKey[timeScale]);
+      const maxTimeScaleNumber = hasSubdailyLayers ? 5 : 3;
       // left arrow
       if (e.keyCode === 37) {
         e.preventDefault();
@@ -406,6 +413,18 @@ class Timeline extends React.Component {
       } else if (e.keyCode === 39) {
         e.preventDefault();
         this.throttleIncrementDate();
+      // up arrow
+      } else if (e.keyCode === 38) {
+        e.preventDefault();
+        if (timeScaleNumber > 1) {
+          this.changeTimeScale(timeScaleNumber - 1);
+        }
+      // down arrow
+      } else if (e.keyCode === 40) {
+        e.preventDefault();
+        if (timeScaleNumber < maxTimeScaleNumber) {
+          this.changeTimeScale(timeScaleNumber + 1);
+        }
       }
     }
   };
@@ -446,7 +465,8 @@ class Timeline extends React.Component {
     this.setState({
       showHoverLine: false,
       showDraggerTime: false
-    }, this.props.changeTimeScale(timeScale));
+    });
+    this.props.changeTimeScale(timeScale);
   };
 
   /**
@@ -988,7 +1008,7 @@ class Timeline extends React.Component {
                     animationEndLocation={animationEndLocation}
                     animStartLocationDate={animStartLocationDate}
                     animEndLocationDate={animEndLocationDate}
-                    changeTimeScale={this.changeTimeScale}
+                    changeTimeScale={this.debounceChangeTimeScale}
                     updatePositioning={this.updatePositioning}
                     updateTimelineMoveAndDrag={this.updateTimelineMoveAndDrag}
                     updatePositioningOnSimpleDrag={this.updatePositioningOnSimpleDrag}

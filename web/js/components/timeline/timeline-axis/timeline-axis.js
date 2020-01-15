@@ -4,7 +4,6 @@ import Draggable from 'react-draggable';
 import GridRange from './grid-range/grid-range';
 import moment from 'moment';
 
-import { debounce as lodashDebounce } from 'lodash';
 import { getTimeRange } from './date-calc';
 import {
   timeScaleOptions,
@@ -29,7 +28,8 @@ class TimelineAxis extends Component {
       wheelZoom: false,
       mouseDown: false,
       hitRightBound: false,
-      hitLeftBound: false
+      hitLeftBound: false,
+      updatedTimeScale: false
     };
     // axis
     this.handleDrag = this.handleDrag.bind(this);
@@ -41,14 +41,6 @@ class TimelineAxis extends Component {
 
     // wheel event timeout
     this.wheelTimeout = 0;
-
-    // debounce wheel vertical scroll for timescale unit change
-    const debounceSettings = { leading: true, trailing: false };
-    this.debounceHandleWheelScroll = lodashDebounce(
-      this.handleWheelScroll.bind(this),
-      100,
-      debounceSettings
-    );
   }
 
   /**
@@ -503,6 +495,10 @@ class TimelineAxis extends Component {
       } else {
         leftOffset = 0.80;
       }
+      // add updateTimeScale flag to indicate showHover should not fire immediately
+      this.setState({
+        updatedTimeScale: true
+      });
       this.updateScale(draggerDate, timeScale, null, leftOffset, true, prevProps.timeScale);
     }
 
@@ -670,9 +666,15 @@ class TimelineAxis extends Component {
   */
   showHoverOn = (e) => {
     const { isAnimationDraggerDragging, isTimelineDragging, showHoverOn } = this.props;
-    if (!isAnimationDraggerDragging && !isTimelineDragging) {
-      if (e.target.className.animVal === 'axis-grid-rect') {
-        showHoverOn();
+    if (this.state.updatedTimeScale) {
+      this.setState({
+        updatedTimeScale: false
+      });
+    } else {
+      if (!isAnimationDraggerDragging && !isTimelineDragging) {
+        if (e.target.className.animVal === 'axis-grid-rect') {
+          showHoverOn();
+        }
       }
     }
   }
@@ -685,9 +687,14 @@ class TimelineAxis extends Component {
   * @returns {void}
   */
   handleWheelType = (e) => {
-    if (e.deltaY !== 0) {
-      this.debounceHandleWheelScroll(e);
-    } else if (e.deltaX !== 0) {
+    const deltaY = e.deltaY;
+    const deltaX = e.deltaX;
+    // determine more dominant scroll direction for diagonal cases
+    const yType = deltaY !== 0 && Math.abs(deltaY) > Math.abs(deltaX);
+    const xType = deltaX !== 0 && Math.abs(deltaX) > Math.abs(deltaY);
+    if (yType) {
+      this.handleWheelScroll(e);
+    } else if (xType) {
       this.handleWheelPan(e);
     }
   }
@@ -708,27 +715,23 @@ class TimelineAxis extends Component {
     const maxTimeScaleNumber = hasSubdailyLayers ? 5 : 3;
 
     // handle time scale change on y axis wheel event
-    if (e.deltaY !== 0) {
-      // wheel zoom out
-      if (e.deltaY > 0) {
-        if (timeScaleNumber > 1) {
-          clearTimeout(this.wheelTimeout);
-          this.wheelTimeout = setTimeout(() => {
-            this.setState({
-              wheelZoom: true
-            }, changeTimeScale(timeScaleNumber - 1));
-          }, 50);
-        }
-      // wheel zoom in
-      } else {
-        if (timeScaleNumber < maxTimeScaleNumber) {
-          clearTimeout(this.wheelTimeout);
-          this.wheelTimeout = setTimeout(() => {
-            this.setState({
-              wheelZoom: true
-            }, changeTimeScale(timeScaleNumber + 1));
-          }, 50);
-        }
+    // wheel zoom out
+    if (e.deltaY > 0) {
+      if (timeScaleNumber > 1) {
+        clearTimeout(this.wheelTimeout);
+        this.setState({
+          wheelZoom: true
+        });
+        changeTimeScale(timeScaleNumber - 1);
+      }
+    // wheel zoom in
+    } else {
+      if (timeScaleNumber < maxTimeScaleNumber) {
+        clearTimeout(this.wheelTimeout);
+        this.setState({
+          wheelZoom: true
+        });
+        changeTimeScale(timeScaleNumber + 1);
       }
     }
   }
@@ -754,63 +757,61 @@ class TimelineAxis extends Component {
     const deltaChangeCoefficient = 20;
 
     // handle horizontal scroll on x axis wheel event
-    if (e.deltaX !== 0) {
-      this.handleStartDrag();
-      // mutli-touch drag left
-      if (e.deltaX > 0) {
-        const scrollX = position - deltaChangeCoefficient;
-        // cancel drag if exceeds axis leftBound and hitLeftBound flag hit
-        if (scrollX < leftBound && hitLeftBound) {
-          clearTimeout(this.wheelTimeout);
-          updateTimelineMoveAndDrag(false, false);
-        } else {
-          const deltaObj = {
-            deltaX: -deltaChangeCoefficient,
-            x: scrollX
-          };
-
-          // if leftBound will be hit with next delta pan
-          if (position - deltaChangeCoefficient * 2 < leftBound) {
-            updateTimelineMoveAndDrag(false, false);
-            this.setState({
-              hitLeftBound: true
-            });
-          } else {
-            // drag and update positioning
-            this.handleDrag(e, deltaObj);
-            clearTimeout(this.wheelTimeout);
-            this.wheelTimeout = setTimeout(() => {
-              this.handleStopDrag(null, deltaObj, true);
-            }, 50);
-          }
-        }
-      // multi-touch drag right
+    this.handleStartDrag();
+    // mutli-touch drag left
+    if (e.deltaX > 0) {
+      const scrollX = position - deltaChangeCoefficient;
+      // cancel drag if exceeds axis leftBound and hitLeftBound flag hit
+      if (scrollX < leftBound && hitLeftBound) {
+        clearTimeout(this.wheelTimeout);
+        updateTimelineMoveAndDrag(false, false);
       } else {
-        const scrollX = position + deltaChangeCoefficient;
-        // cancel drag if exceeds axis rightBound and hitRightBound flag hit
-        if (scrollX > rightBound && hitRightBound) {
-          clearTimeout(this.wheelTimeout);
-          updateTimelineMoveAndDrag(false, false);
-        } else {
-          const deltaObj = {
-            deltaX: deltaChangeCoefficient,
-            x: scrollX
-          };
+        const deltaObj = {
+          deltaX: -deltaChangeCoefficient,
+          x: scrollX
+        };
 
-          // if leftBound will be hit with next delta pan
-          if (position + deltaChangeCoefficient * 2 > rightBound) {
-            updateTimelineMoveAndDrag(false, false);
-            this.setState({
-              hitRightBound: true
-            });
-          } else {
-            // drag and update positioning
-            this.handleDrag(e, deltaObj);
-            clearTimeout(this.wheelTimeout);
-            this.wheelTimeout = setTimeout(() => {
-              this.handleStopDrag(null, deltaObj, true);
-            }, 50);
-          }
+        // if leftBound will be hit with next delta pan
+        if (position - deltaChangeCoefficient * 2 < leftBound) {
+          updateTimelineMoveAndDrag(false, false);
+          this.setState({
+            hitLeftBound: true
+          });
+        } else {
+          // drag and update positioning
+          this.handleDrag(e, deltaObj);
+          clearTimeout(this.wheelTimeout);
+          this.wheelTimeout = setTimeout(() => {
+            this.handleStopDrag(null, deltaObj, true);
+          }, 35);
+        }
+      }
+    // multi-touch drag right
+    } else {
+      const scrollX = position + deltaChangeCoefficient;
+      // cancel drag if exceeds axis rightBound and hitRightBound flag hit
+      if (scrollX > rightBound && hitRightBound) {
+        clearTimeout(this.wheelTimeout);
+        updateTimelineMoveAndDrag(false, false);
+      } else {
+        const deltaObj = {
+          deltaX: deltaChangeCoefficient,
+          x: scrollX
+        };
+
+        // if leftBound will be hit with next delta pan
+        if (position + deltaChangeCoefficient * 2 > rightBound) {
+          updateTimelineMoveAndDrag(false, false);
+          this.setState({
+            hitRightBound: true
+          });
+        } else {
+          // drag and update positioning
+          this.handleDrag(e, deltaObj);
+          clearTimeout(this.wheelTimeout);
+          this.wheelTimeout = setTimeout(() => {
+            this.handleStopDrag(null, deltaObj, true);
+          }, 35);
         }
       }
     }
