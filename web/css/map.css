@@ -106,12 +106,14 @@
   border-right: 2px solid #fff;
 }
 .wv-map-scale-imperial {
-  bottom: 130px;
+  /* bottom: 130px; */
+  bottom: 150px;
   border-top: 2px solid #fff;
 }
 
 .wv-map-scale-metric {
-  bottom: 149px;
+  /* bottom: 149px; */
+  bottom: 169px;
   border-bottom: 2px solid #fff;
 }
 
@@ -123,7 +125,8 @@
   position: absolute;
   top: auto;
   right: 10px;
-  bottom: 85px;
+  /* bottom: 85px; */
+  bottom: 103px;
   white-space: pre;
   outline: none;
   color: #fff;

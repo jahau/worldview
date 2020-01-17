@@ -11,6 +11,7 @@ import {
 import { datesinDateRanges } from '../../modules/layers/util';
 import Scrollbars from '../util/scrollbar';
 import { Checkbox } from '../util/checkbox';
+import { Tooltip } from 'reactstrap';
 
 /*
  * Timeline Data Panel for layer coverage.
@@ -23,9 +24,9 @@ class TimelineData extends Component {
     super(props);
     this.state = {
       activeLayers: [],
-      matchingCoverage: [],
-      isMatchingCoverageChecked: false,
-      checkedLayerIds: {}
+      isIncludeInactiveLayersChecked: false,
+      checkedLayerIds: {},
+      hoveredTooltip: {}
     };
   }
 
@@ -33,13 +34,28 @@ class TimelineData extends Component {
     this.setActiveLayers();
     // prevent bubbling to parent which the wheel event is blocked for timeline zoom in/out wheel event
     document.querySelector('.timeline-data-panel-container').addEventListener('wheel', (e) => e.stopPropagation(), { passive: false });
+    // init populate of activeLayers
+    this.addMatchingCoverageToTimeline(false, this.props.activeLayers);
   }
+
+  // TODO: seems like a lot of unecesssary updates on map zooms
+  // shouldComponentUpdate(nextProps, nextState) {
+  //   const { activeLayers, hoveredLayer, appNow, timeScale } = this.props;
+  //   console.log(nextProps.appNow, nextProps.hoveredLayer === hoveredLayer, lodashIsEqual(nextProps.activeLayers, activeLayers));
+  //   if (nextProps.timeScale === timeScale && lodashIsEqual(nextState.activeLayers, this.state.activeLayers) && nextProps.appNow === appNow && nextProps.hoveredLayer === hoveredLayer && lodashIsEqual(nextProps.activeLayers, activeLayers)) {
+  //     return false;
+  //   }
+
+  //   return true;
+  // }
 
   componentDidUpdate(prevProps) {
     const { activeLayers } = this.props;
     // need to update layer toggles for show/hide/remove
     if (!lodashIsEqual(prevProps.activeLayers, activeLayers)) {
+      // update coverage including layer added/removed and option changes (active/inactive)
       this.setActiveLayers();
+      this.addMatchingCoverageToTimeline(this.state.isIncludeInactiveLayersChecked, activeLayers);
       if (activeLayers.length === 0) {
         this.closeModal();
       }
@@ -121,68 +137,85 @@ class TimelineData extends Component {
     };
   }
 
+  hoverOnToolTip = (input) => {
+    this.setState({
+      hoveredTooltip: { [input]: true }
+    });
+  }
+
+  hoverOffToolTip = () => {
+    this.setState({
+      hoveredTooltip: {}
+    });
+  }
+
   closeModal = () => {
     this.props.toggleDataCoveragePanel(false);
   }
 
-  toggleCoverageToFilterPool = (isChecked, layer) => {
-    const { matchingCoverage, checkedLayerIds, isMatchingCoverageChecked } = this.state;
+  // toggleCoverageToFilterPool = (isChecked, layer) => {
+  //   const { matchingCoverage, checkedLayerIds, isIncludeInactiveLayersChecked } = this.state;
 
-    let newMatchingCoverage;
-    if (isChecked) {
-      // add layer
-      const newCoverage = {
-        layerId: layer.id,
-        startDate: layer.startDate,
-        endDate: layer.endDate
-      };
-      newMatchingCoverage = matchingCoverage.concat(newCoverage);
-      checkedLayerIds[layer.id] = true;
-    } else {
-      // remove toggled layer
-      newMatchingCoverage = matchingCoverage.filter((x) => x.layerId !== layer.id);
-      delete checkedLayerIds[layer.id];
-    }
+  //   let newMatchingCoverage;
+  //   if (isChecked) {
+  //     // add layer
+  //     const newCoverage = {
+  //       layerId: layer.id,
+  //       startDate: layer.startDate,
+  //       endDate: layer.endDate
+  //     };
+  //     newMatchingCoverage = matchingCoverage.concat(newCoverage);
+  //     checkedLayerIds[layer.id] = true;
+  //   } else {
+  //     // remove toggled layer
+  //     newMatchingCoverage = matchingCoverage.filter((x) => x.layerId !== layer.id);
+  //     delete checkedLayerIds[layer.id];
+  //   }
 
-    this.setState({
-      matchingCoverage: newMatchingCoverage,
-      checkedLayerIds: checkedLayerIds
-    }, () => {
-      if (isMatchingCoverageChecked) {
-        this.addMatchingCoverageToTimeline(true);
-      }
-    });
-  }
+  //   this.setState({
+  //     matchingCoverage: newMatchingCoverage,
+  //     checkedLayerIds: checkedLayerIds
+  //   }, () => {
+  //     if (isIncludeInactiveLayersChecked) {
+  //       this.addMatchingCoverageToTimeline(true);
+  //     }
+  //   });
+  // }
 
-  addMatchingCoverageToTimeline = (isChecked) => {
+  addMatchingCoverageToTimeline = (isChecked, layerCollection = this.state.activeLayers) => {
     let dateRange;
     if (isChecked) {
-      dateRange = this.getNewMatchingDatesRange();
+      dateRange = this.getNewMatchingDatesRange(true, layerCollection);
     } else {
-      dateRange = {};
+      dateRange = this.getNewMatchingDatesRange(false, layerCollection);
     }
+    // console.log(dateRange);
     this.props.setMatchingTimelineCoverage(dateRange);
     this.setState({
-      isMatchingCoverageChecked: isChecked
+      isIncludeInactiveLayersChecked: isChecked
     });
   }
 
   // return startDate and endDate based on layers currently selected for matching coverage
-  getNewMatchingDatesRange = () => {
-    const { matchingCoverage } = this.state;
+  getNewMatchingDatesRange = (showInactiveCoverageToggle, layerCollection) => {
+    const layers = layerCollection.filter(layer => {
+      return showInactiveCoverageToggle
+        ? layer.startDate
+        : layer.startDate && layer.visible;
+    });
 
     let startDate;
     let endDate = new Date(this.props.appNow);
-    if (matchingCoverage.length > 0) {
+    if (layers.length > 0) {
       // get start date
       // for each start date, find latest that is still below end date
-      const startDates = matchingCoverage.reduce((acc, x) => {
+      const startDates = layers.reduce((acc, x) => {
         return x.startDate ? acc.concat(x.startDate) : acc;
       }, []);
       // console.log(startDates);
 
       // for each end date, find earlier that is still after start date
-      const endDates = matchingCoverage.reduce((acc, x) => {
+      const endDates = layers.reduce((acc, x) => {
         return x.endDate ? acc.concat(x.endDate) : acc;
       }, []);
       // console.log(endDates);
@@ -206,6 +239,8 @@ class TimelineData extends Component {
           endDate = date;
         }
       }
+
+      // console.log(startDate.toISOString(), endDate.toISOString());
       return {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString()
@@ -228,16 +263,15 @@ class TimelineData extends Component {
           <div className={'timeline-data-panel'} style={{ width: mainContainerWidth }}>
             <header className={'timeline-data-panel-header'}>
               <h3>LAYER COVERAGE</h3>
-              {/* TODO: Toggle coincident vs all coverage */}
               <Checkbox
-                checked={this.state.isMatchingCoverageChecked}
+                checked={this.state.isIncludeInactiveLayersChecked}
                 classNames='wv-checkbox-data-matching-main'
                 id='wv-checkbox-data-matching-main'
-                label='Show Matching Coverage on Timeline'
+                label='Include Inactive Layers'
                 name='wv-checkbox-data-matching-main'
                 onCheck={(isChecked) => this.addMatchingCoverageToTimeline(isChecked)}
                 inputPosition={'right'}
-                title='Show Matching Coverage on Timeline'
+                title='Include Inactive Layers'
                 optionalCaseClassName={'timeline-data-panel-wv-checkbox-container'}
                 optionalLabelClassName={'timeline-data-panel-wv-checkbox-label'}
               />
@@ -253,49 +287,57 @@ class TimelineData extends Component {
 
                   const options = this.getLineDimensions(layer);
                   const enabled = layer.visible;
-                  const backgroundColor = enabled ? '#00457B' : 'grey';
+                  const containerBackgroundColor = enabled ? '#ccc' : 'rgba(255, 255, 255, 0.2)';
+
+                  // lighten data panel layer container on sidebar hover
+                  const containerHoveredBackgroundColor = enabled ? '#e6e6e6' : 'rgba(255, 255, 255, 0.3)';
+                  const backgroundColor = enabled ? '#00457B' : 'rgba(255, 255, 255, 0.2)';
+                  const textColor = enabled ? '#222' : '#999';
                   // get date range to display
                   const dateRangeStart = (layer.startDate && layer.startDate.split('T')[0]) || 'start';
                   const dateRangeEnd = (layer.endDate && layer.endDate.split('T')[0]) || 'present';
                   const dateRange = `${dateRangeStart} - ${dateRangeEnd}`;
 
                   const isLayerHoveredInSidebar = layer.id === this.props.hoveredLayer;
-                  if (isLayerHoveredInSidebar) {
-                    console.log('hovered', this.props.hoveredLayer);
-                  }
+                  const multipleCoverageRangesDateIntervals = {};
                   return (
                     <div key={index} className={`data-panel-layer-item data-item-${layer.id}`}
                       style={{
-                        background: isLayerHoveredInSidebar ? '#474747' : '',
-                        outline: isLayerHoveredInSidebar ? '1px solid #858585' : ''
+                        // background: isLayerHoveredInSidebar ? '#474747' : '',
+                        background: isLayerHoveredInSidebar ? containerHoveredBackgroundColor : containerBackgroundColor,
+                        outline: isLayerHoveredInSidebar ? '1px solid #222' : ''
                       }}
                     >
                       <div className="data-panel-layer-item-header">
-                        <div className="data-panel-layer-item-title">{layer.title} <span className="data-panel-layer-item-subtitle">{layer.subtitle}</span></div>
-                        <Checkbox
-                          checked={!!this.state.checkedLayerIds[layer.id]}
-                          classNames='wv-checkbox-data-matching-layer'
-                          id={`wv-checkbox-data-matching-${layer.id}`}
-                          label={dateRange}
-                          name={`wv-checkbox-data-matching-${layer.id}`}
-                          onCheck={(isChecked) => this.toggleCoverageToFilterPool(isChecked, layer)}
-                          inputPosition={'right'}
-                          title='Add Layer to Matching Coverage Filter'
-                          optionalCaseClassName={'timeline-data-panel-wv-checkbox-container-layer'}
-                          optionalLabelClassName={'timeline-data-panel-wv-checkbox-label-layer'}
-                        />
+                        <div className="data-panel-layer-item-title"
+                          style={{
+                            color: enabled ? '#000' : '#999'
+                          }}>{layer.title} <span
+                            className="data-panel-layer-item-subtitle"
+                            style={{
+                              color: textColor
+                            }}>{layer.subtitle}</span></div>
+                        <div
+                          className="data-panel-layer-item-date-range"
+                          style={{
+                            color: textColor
+                          }}>{dateRange}</div>
                       </div>
                       <div className={`data-panel-layer-coverage-line-container data-line-${layer.id}`} style={{ maxWidth: `${this.props.axisWidth}px` }}>
                         {multipleCoverageRanges
+                        // multiple coverage ranges
                           ? <div className="data-panel-coverage-line" style={{
                             position: 'relative',
                             width: `${options.width}px`
                           }}>
                             {layer.dateRanges.map((range, index) => {
+                              // console.log(range);
                               const rangeStart = range.startDate;
                               const rangeEnd = range.endDate;
                               const rangeInterval = Number(range.dateInterval);
                               let rangeOptions;
+                              // multi day range in DAY timescale
+                              // TODO: expand based on what a user can see
                               if (rangeInterval !== 1 && this.props.timeScale === 'day') {
                                 const startDateLimit = new Date(this.props.frontDate);
                                 let endDateLimit = new Date(this.props.backDate);
@@ -308,44 +350,108 @@ class TimelineData extends Component {
                                   dateIntervalStartDates = datesinDateRanges(layer, endDateLimit, startDateLimit, endDateLimit);
                                 }
 
-                                return dateIntervalStartDates.map((rangeDate, index) => {
-                                  const minYear = rangeDate.getUTCFullYear();
-                                  const minMonth = rangeDate.getUTCMonth();
-                                  const minDay = rangeDate.getUTCDate();
-                                  const rangeDateEnd = new Date(minYear, minMonth, minDay + rangeInterval);
-                                  rangeOptions = this.getLineDimensions(layer, rangeDate, rangeDateEnd);
+                                // add date intervals to object to catch repeats
+                                dateIntervalStartDates.forEach((dateInt) => {
+                                  const dateIntFormatted = dateInt.toISOString();
+                                  multipleCoverageRangesDateIntervals[dateIntFormatted] = dateInt;
+                                });
 
-                                  return rangeOptions.visible && (
-                                    <div className="data-panel-coverage-line" key={index} style={{
+                                // if at the end of dateRanges array, display results from multipleCoverageRangesDateIntervals
+                                // TODO: object ordering reliability concerns ?
+                                if (index === layer.dateRanges.length - 1) {
+                                  const multiDateToDisplay = Object.values(multipleCoverageRangesDateIntervals);
+                                  // console.log(multiDateToDisplay);
+
+                                  return multiDateToDisplay.map((rangeDate, index) => {
+                                    const minYear = rangeDate.getUTCFullYear();
+                                    const minMonth = rangeDate.getUTCMonth();
+                                    const minDay = rangeDate.getUTCDate();
+                                    const rangeDateEnd = new Date(minYear, minMonth, minDay + rangeInterval);
+                                    rangeOptions = this.getLineDimensions(layer, rangeDate, rangeDateEnd);
+
+                                    const cleanRangeStart = rangeDate.toISOString().replace(/[.:]/g, '_');
+                                    const cleanRangeEnd = rangeDateEnd.toISOString().replace(/[.:]/g, '_');
+                                    const backgroundMulti = index % 2 === 0
+                                      ? enabled ? '#00457B' : 'grey'
+                                      : enabled ? '#0084eb' : 'grey';
+
+                                    // console.log(`data-coverage-line-${layer.id}-${cleanRangeStart}-${cleanRangeEnd}`);
+                                    return rangeOptions.visible && (
+                                      <div
+                                        id={`data-coverage-line-${layer.id}-${cleanRangeStart}-${cleanRangeEnd}`}
+                                        className="data-panel-coverage-line" key={index}
+                                        onMouseEnter={() => this.hoverOnToolTip(`${layer.id}-${cleanRangeStart}-${cleanRangeEnd}`)}
+                                        onMouseLeave={() => this.hoverOffToolTip()}
+                                        style={{
+                                          position: 'absolute',
+                                          left: rangeOptions.leftOffset,
+                                          width: `${rangeOptions.width}px`,
+                                          backgroundColor: backgroundMulti,
+                                          borderRadius: rangeOptions.borderRadius
+                                        }}>
+                                        <Tooltip
+                                          placement={'auto'}
+                                          container={`.data-item-${layer.id}`}
+                                          isOpen={this.state.hoveredTooltip[`${layer.id}-${cleanRangeStart}-${cleanRangeEnd}`]}
+                                          target={`data-coverage-line-${layer.id}-${cleanRangeStart}-${cleanRangeEnd}`}>
+                                          {`${cleanRangeStart.split('T')[0]} to ${cleanRangeEnd.split('T')[0]}`}
+                                        </Tooltip>
+                                      </div>
+                                    );
+                                  });
+                                // still traversing array and building multipleCoverageRangesDateIntervals object of dates
+                                } else {
+                                  return null;
+                                }
+                              // multi day range not in DAY timescale
+                              } else {
+                                rangeOptions = this.getLineDimensions(layer, rangeStart, rangeEnd);
+                                const cleanRangeStart = rangeStart.replace(/:/g, '_');
+                                const cleanRangeEnd = rangeEnd.replace(/:/g, '_');
+
+                                return rangeOptions.visible && (
+                                  <div
+                                    id={`data-coverage-line-${layer.id}-${cleanRangeStart}-${cleanRangeEnd}`}
+                                    className="data-panel-coverage-line" key={index}
+                                    onMouseEnter={() => this.hoverOnToolTip(`${layer.id}-${cleanRangeStart}-${cleanRangeEnd}`)}
+                                    onMouseLeave={() => this.hoverOffToolTip()}
+                                    style={{
                                       position: 'absolute',
                                       left: rangeOptions.leftOffset,
                                       width: `${rangeOptions.width}px`,
                                       backgroundColor: backgroundColor,
                                       borderRadius: rangeOptions.borderRadius
-                                    }}>{rangeDate.toISOString().split('T')[0]}</div>
-                                  );
-                                });
-                              } else {
-                                rangeOptions = this.getLineDimensions(layer, rangeStart, rangeEnd);
-                                return rangeOptions.visible && (
-                                  <div className="data-panel-coverage-line" key={index} style={{
-                                    position: 'absolute',
-                                    left: rangeOptions.leftOffset,
-                                    width: `${rangeOptions.width}px`,
-                                    backgroundColor: backgroundColor,
-                                    borderRadius: rangeOptions.borderRadius
-                                  }}>{rangeStart}</div>
+                                    }}>
+                                    <Tooltip
+                                      placement={'auto'}
+                                      isOpen={this.state.hoveredTooltip[`${layer.id}-${cleanRangeStart}-${cleanRangeEnd}`]}
+                                      target={`data-coverage-line-${layer.id}-${cleanRangeStart}-${cleanRangeEnd}`}>
+                                      {`${cleanRangeStart.split('T')[0]} to ${cleanRangeEnd.split('T')[0]}`}
+                                    </Tooltip>
+                                  </div>
                                 );
                               }
                             })}
                           </div>
-                          : options.visible && <div className="data-panel-coverage-line" style={{
-                            position: 'relative',
-                            left: options.leftOffset,
-                            width: `${options.width}px`,
-                            backgroundColor: backgroundColor,
-                            borderRadius: options.borderRadius
-                          }}>
+                          // single start -> end date range
+                          : options.visible && <div
+                            id={`data-coverage-line-${layer.id}-${dateRangeStart}-${dateRangeEnd}`}
+                            className="data-panel-coverage-line"
+                            onMouseEnter={() => this.hoverOnToolTip(`${layer.id}-${dateRangeStart}-${dateRangeEnd}`)}
+                            onMouseLeave={() => this.hoverOffToolTip()}
+                            style={{
+                              position: 'relative',
+                              left: options.leftOffset,
+                              width: `${options.width}px`,
+                              backgroundColor: backgroundColor,
+                              borderRadius: options.borderRadius
+                            }}>
+                            <Tooltip
+                              placement={'auto'}
+                              isOpen={this.state.hoveredTooltip[`${layer.id}-${dateRangeStart}-${dateRangeEnd}`]}
+                              target={`data-coverage-line-${layer.id}-${dateRangeStart}-${dateRangeEnd}`}>
+                              {`${dateRangeStart} to ${dateRangeEnd}`}
+                            </Tooltip>
                           </div>
                         }
                       </div>
@@ -390,6 +496,7 @@ TimelineData.propTypes = {
   axisWidth: PropTypes.number,
   backDate: PropTypes.string,
   frontDate: PropTypes.string,
+  hoveredLayer: PropTypes.string,
   isDataCoveragePanelOpen: PropTypes.bool,
   matchingTimelineCoverage: PropTypes.object,
   parentOffset: PropTypes.number,

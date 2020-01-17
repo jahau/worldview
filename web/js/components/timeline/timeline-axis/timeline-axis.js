@@ -1317,11 +1317,13 @@ class TimelineAxis extends Component {
                     visibility: lineCoverageOptions.visible ? 'visible' : 'hidden',
                     margin: '0 0 6px 0'
                   }}
+                  rx={5}
+                  ry={5}
                   width={lineCoverageOptions.width}
                   height={15}
                   transform={`translate(${transformX + lineCoverageOptions.leftOffset}, 0)`}
-                  fill={'#0087f1'}
-                  stroke={'#00457b'}
+                  fill={'#e83d2a'}
+                  stroke={'#e83d2a'}
                   strokeWidth={1}
                   />
                 </g>

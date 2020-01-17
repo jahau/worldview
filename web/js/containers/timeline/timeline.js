@@ -1038,7 +1038,12 @@ class Timeline extends React.Component {
                     showHoverLine={showHoverLine}
                     isTimelineDragging={isTimelineDragging}
                     isAnimationDraggerDragging={isAnimationDraggerDragging}
-                    isDataCoveragePanelOpen={this.state.isDataCoveragePanelOpen}
+                    isDraggerDragging={isDraggerDragging}
+                    draggerSelected={draggerSelected}
+                    draggerPosition={draggerPosition}
+                    draggerPositionB={draggerPositionB}
+                    // isDataCoveragePanelOpen={this.state.isDataCoveragePanelOpen}
+                    isDataCoveragePanelOpen={true}
                   />
 
                   {isAnimationWidgetOpen &&
@@ -1106,7 +1111,8 @@ class Timeline extends React.Component {
                       hasSubdailyLayers={hasSubdailyLayers}
                       showDraggerTime={showDraggerTime}
                       showHoverLine={showHoverLine}
-                      isDataCoveragePanelOpen={this.state.isDataCoveragePanelOpen}
+                      // isDataCoveragePanelOpen={this.state.isDataCoveragePanelOpen}
+                      isDataCoveragePanelOpen={true}
                     />
                     : null
                   }
@@ -1127,7 +1133,8 @@ class Timeline extends React.Component {
                     setMatchingTimelineCoverage={this.setMatchingTimelineCoverage}
                     matchingTimelineCoverage={this.state.matchingTimelineCoverage}
                     toggleDataCoveragePanel={this.toggleDataCoveragePanel}
-                    isDataCoveragePanelOpen={this.state.isDataCoveragePanelOpen}
+                    // isDataCoveragePanelOpen={this.state.isDataCoveragePanelOpen}
+                    isDataCoveragePanelOpen={true}
                   />
                 }
 
@@ -1135,13 +1142,19 @@ class Timeline extends React.Component {
                 <div
                   style={{
                     position: 'absolute',
-                    left: 0,
-                    bottom: 100,
-                    background: 'cornflowerblue',
-                    padding: '5px'
+                    right: '19px',
+                    bottom: '66px'
                   }}
                 >
-                  <button onClick={() => this.toggleDataCoveragePanel(!this.state.isDataCoveragePanelOpen)}>TOGGLE DATA PANEL</button>
+                  <button
+                    style={{
+                      background: 'rgba(40, 40, 40, 0.85)',
+                      width: '57px',
+                      border: '1px solid #333',
+                      color: '#fff',
+                      borderTopRightRadius: '5px',
+                      borderTopLeftRadius: '5px'
+                    }} onClick={() => this.toggleDataCoveragePanel(!this.state.isDataCoveragePanelOpen)}><i className="fas fa-bars"></i></button>
                 </div>
 
                 {/* custom interval selector */}

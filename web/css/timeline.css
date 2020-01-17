@@ -676,6 +676,7 @@ button:focus {
   opacity: 0;
   transition: all 0.4s ease-out;
   z-index: 5;
+  background: rgba(40, 40, 40, 1);
 }
 
 .animate-timeline-data-panel-slide-up {
@@ -723,7 +724,15 @@ button:focus {
 
 .timeline-data-panel-wv-checkbox-label-layer {
   padding-right: 5px;
-  font-size: 11px;
+  font-size: 11.7px;
+}
+
+.label-layer-active {
+  color: #000;
+}
+
+.label-layer-inactive {
+  color: #999;
 }
 
 .wv-checkbox-data-matching-main:hover,
@@ -735,17 +744,17 @@ button:focus {
   height: 18px;
   width: 22px;
   right: 10px;
-  bottom: 1px;
-  left: 231px;
+  bottom: 0;
+  left: 142px;
 }
 
-.wv-checkbox-data-matching-layer {
+/* .wv-checkbox-data-matching-layer {
   height: 18px !important;
   width: 22px !important;
   right: 10px !important;
   bottom: 0 !important;
   left: 157px !important;
-}
+} */
 
 .timeline-data-panel {
   position: relative;
@@ -764,13 +773,19 @@ button:focus {
 .data-panel-layer-item-header {
   display: flex;
   align-items: center;
-  padding: 5px 5px 0;
+  padding: 8px 3px 5px;
+  font-size: 11.7px;
 }
 
 .data-panel-layer-item-subtitle {
-  color: #999;
-  font-size: 11px;
+  font-style: italic;
+  font-size: 10.4px;
   padding-left: 3px;
+}
+
+.data-panel-layer-item-date-range {
+  position: absolute;
+  right: 15px;
 }
 
 .data-panel-layer-list {
@@ -784,4 +799,12 @@ button:focus {
 
 .data-panel-coverage-line {
   height: 12px;
+}
+
+.xyz {
+  overflow: visible;
+}
+
+.zzz {
+  overflow: visible;
 }

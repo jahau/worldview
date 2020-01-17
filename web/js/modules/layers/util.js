@@ -183,6 +183,14 @@ export function datesinDateRanges(def, date, startDateLimit, endDateLimit) {
         let day = new Date(minYear, minMonth, minDay + i * dateInterval);
         day = new Date(day.getTime() - (day.getTimezoneOffset() * 60000));
 
+        if (dateArray.length > 0) {
+          // prevent earlier dates from being added after later dates while building dateArray
+          if (day < dateArray[dateArray.length - 1]) {
+            dateArray[dateArray.length - 1] = day;
+            continue;
+          }
+        }
+
         if (minStartDayDate) {
           const dayTime = day.getTime();
           const minStartDayDateTime = minStartDayDate.getTime();
